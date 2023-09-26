@@ -264,50 +264,50 @@ async function vlessOverWSHandler(request) {
  * @param {function} log The logging function.
  * @returns {Promise<void>} The remote socket.
  */
-async function handleTCPOutBound(remoteSocket, addressRemote, portRemote, rawClientData, webSocket, vlessResponseHeader, log) {
+async function handleTCPOutBound(remoteSocket, addressRemote, portRemote, rawClientData, webSocket, vlessResponseHeader, log,) {
 
-  /**
-   * Connects to a given address and port and writes data to the socket.
-   * @param {string} address The address to connect to.
-   * @param {number} port The port to connect to.
-   * @returns {Promise<import("@cloudflare/workers-types").Socket>} A Promise that resolves to the connected socket.
-   */
-  async function connectAndWrite(address, port) {
-    /** @type {import("@cloudflare/workers-types").Socket} */
-    const tcpSocket = connect({
-      hostname: address,
-      port: port,
-    });
-    remoteSocket.value = tcpSocket;
-    log(`connected to ${address}:${port}`);
-    const writer = tcpSocket.writable.getWriter();
-    await writer.write(rawClientData); // first write, normal is tls client hello
-    writer.releaseLock();
-    return tcpSocket;
-  }
+	/**
+	 * 连接到给定的地址和端口，并向套接字写入数据。
+	 * @param {string} address 要连接的地址。
+	 * @param {number} port 要连接的端口。
+	 * @returns {Promise<import("@cloudflare/workers-types").Socket>} 一个解析为已连接套接字的 Promise。
+	 */
+	async function connectAndWrite(address, port) {
+		/** @type {import("@cloudflare/workers-types").Socket} */
+		const tcpSocket = connect({
+			hostname: address,
+			port: port,
+		});
+		remoteSocket.value = tcpSocket;
+		log(`connected to ${address}:${port}`);
+		const writer = tcpSocket.writable.getWriter();
+		await writer.write(rawClientData); // first write, nomal is tls client hello
+		writer.releaseLock();
+		return tcpSocket;
+	}
 
-  /**
-   * Retries connecting to the remote address and port if the Cloudflare socket has no incoming data.
-   * @returns {Promise<void>} A Promise that resolves when the retry is complete.
-   */
-  async function retry() {
-    const nat64Address = '[2a01:4f8:c2c:123f:64:5:6812:cae8]';
-    const tcpSocket = await connectAndWrite(nat64Address, portRemote);
-    tcpSocket.closed.catch(error => {
-      console.log('retry tcpSocket closed error', error);
-    }).finally(() => {
-      safeCloseWebSocket(webSocket);
-    });
-    remoteSocketToWS(tcpSocket, webSocket, vlessResponseHeader, null, log);
-  }
+	/**
+	 * 如果 Cloudflare 套接字没有传入数据，则重试连接到远程地址和端口。
+	 * @returns {Promise<void>} 当重试完成时解析的 Promise。
+	 */
+	async function retry() {
+		const tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote)
+		tcpSocket.closed.catch(error => {
+			console.log('retry tcpSocket closed error', error);
+		}).finally(() => {
+			safeCloseWebSocket(webSocket);
+		})
+		remoteSocketToWS(tcpSocket, webSocket, vlessResponseHeader, null, log);
+	}
 
-  const nat64Address = '[2a01:4f8:c2c:123f:64:5:6812:cae8]';
-  const tcpSocket = await connectAndWrite(nat64Address, portRemote);
+	// 在第一次连接时使用retry
+	await retry();
 
-  // when remoteSocket is ready, pass to websocket
-  // remote --> ws
-  remoteSocketToWS(tcpSocket, webSocket, vlessResponseHeader, retry, log);
+	// 当remoteSocket准备好后，传递给websocket
+	// remote--> ws
+	remoteSocketToWS(remoteSocket.value, webSocket, vlessResponseHeader, null, log);
 }
+
 
 
 /**
