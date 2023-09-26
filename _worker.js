@@ -264,48 +264,51 @@ async function vlessOverWSHandler(request) {
  * @param {function} log The logging function.
  * @returns {Promise<void>} The remote socket.
  */
-async function handleTCPOutBound(remoteSocket, addressRemote, portRemote, rawClientData, webSocket, vlessResponseHeader, log,) {
+async function handleTCPOutBound(remoteSocket, addressRemote, portRemote, rawClientData, webSocket, vlessResponseHeader, log) {
 
-	/**
-	 * Connects to a given address and port and writes data to the socket.
-	 * @param {string} address The address to connect to.
-	 * @param {number} port The port to connect to.
-	 * @returns {Promise<import("@cloudflare/workers-types").Socket>} A Promise that resolves to the connected socket.
-	 */
-	async function connectAndWrite(address, port) {
-		/** @type {import("@cloudflare/workers-types").Socket} */
-		const tcpSocket = connect({
-			hostname: address,
-			port: port,
-		});
-		remoteSocket.value = tcpSocket;
-		log(`connected to ${address}:${port}`);
-		const writer = tcpSocket.writable.getWriter();
-		await writer.write(rawClientData); // first write, nomal is tls client hello
-		writer.releaseLock();
-		return tcpSocket;
-	}
+  /**
+   * Connects to a given address and port and writes data to the socket.
+   * @param {string} address The address to connect to.
+   * @param {number} port The port to connect to.
+   * @returns {Promise<import("@cloudflare/workers-types").Socket>} A Promise that resolves to the connected socket.
+   */
+  async function connectAndWrite(address, port) {
+    /** @type {import("@cloudflare/workers-types").Socket} */
+    const tcpSocket = connect({
+      hostname: address,
+      port: port,
+    });
+    remoteSocket.value = tcpSocket;
+    log(`connected to ${address}:${port}`);
+    const writer = tcpSocket.writable.getWriter();
+    await writer.write(rawClientData); // first write, normal is tls client hello
+    writer.releaseLock();
+    return tcpSocket;
+  }
 
-	/**
-	 * Retries connecting to the remote address and port if the Cloudflare socket has no incoming data.
-	 * @returns {Promise<void>} A Promise that resolves when the retry is complete.
-	 */
-	async function retry() {
-		const tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote)
-		tcpSocket.closed.catch(error => {
-			console.log('retry tcpSocket closed error', error);
-		}).finally(() => {
-			safeCloseWebSocket(webSocket);
-		})
-		remoteSocketToWS(tcpSocket, webSocket, vlessResponseHeader, null, log);
-	}
+  /**
+   * Retries connecting to the remote address and port if the Cloudflare socket has no incoming data.
+   * @returns {Promise<void>} A Promise that resolves when the retry is complete.
+   */
+  async function retry() {
+    const nat64Address = '[2a01:4f8:c2c:123f:64:5:6812:cae8]';
+    const tcpSocket = await connectAndWrite(nat64Address, portRemote);
+    tcpSocket.closed.catch(error => {
+      console.log('retry tcpSocket closed error', error);
+    }).finally(() => {
+      safeCloseWebSocket(webSocket);
+    });
+    remoteSocketToWS(tcpSocket, webSocket, vlessResponseHeader, null, log);
+  }
 
-	const tcpSocket = await connectAndWrite(addressRemote, portRemote);
+  const nat64Address = '[2a01:4f8:c2c:123f:64:5:6812:cae8]';
+  const tcpSocket = await connectAndWrite(nat64Address, portRemote);
 
-	// when remoteSocket is ready, pass to websocket
-	// remote--> ws
-	remoteSocketToWS(tcpSocket, webSocket, vlessResponseHeader, retry, log);
+  // when remoteSocket is ready, pass to websocket
+  // remote --> ws
+  remoteSocketToWS(tcpSocket, webSocket, vlessResponseHeader, retry, log);
 }
+
 
 /**
  * Creates a readable stream from a WebSocket server, allowing for data to be read from the WebSocket.
