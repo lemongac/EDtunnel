@@ -267,10 +267,10 @@ async function vlessOverWSHandler(request) {
 async function handleTCPOutBound(remoteSocket, addressRemote, portRemote, rawClientData, webSocket, vlessResponseHeader, log,) {
 
 	/**
-	 * 连接到给定的地址和端口，并向套接字写入数据。
-	 * @param {string} address 要连接的地址。
-	 * @param {number} port 要连接的端口。
-	 * @returns {Promise<import("@cloudflare/workers-types").Socket>} 一个解析为已连接套接字的 Promise。
+	 * Connects to a given address and port and writes data to the socket.
+	 * @param {string} address The address to connect to.
+	 * @param {number} port The port to connect to.
+	 * @returns {Promise<import("@cloudflare/workers-types").Socket>} A Promise that resolves to the connected socket.
 	 */
 	async function connectAndWrite(address, port) {
 		/** @type {import("@cloudflare/workers-types").Socket} */
@@ -287,8 +287,8 @@ async function handleTCPOutBound(remoteSocket, addressRemote, portRemote, rawCli
 	}
 
 	/**
-	 * 如果 Cloudflare 套接字没有传入数据，则重试连接到远程地址和端口。
-	 * @returns {Promise<void>} 当重试完成时解析的 Promise。
+	 * Retries connecting to the remote address and port if the Cloudflare socket has no incoming data.
+	 * @returns {Promise<void>} A Promise that resolves when the retry is complete.
 	 */
 	async function retry() {
 		const tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote)
@@ -300,12 +300,11 @@ async function handleTCPOutBound(remoteSocket, addressRemote, portRemote, rawCli
 		remoteSocketToWS(tcpSocket, webSocket, vlessResponseHeader, null, log);
 	}
 
-	// 在第一次连接时使用retry
-	await retry();
+	const tcpSocket = await connectAndWrite(addressRemote, portRemote);
 
-	// 当remoteSocket准备好后，传递给websocket
+	// when remoteSocket is ready, pass to websocket
 	// remote--> ws
-	remoteSocketToWS(remoteSocket.value, webSocket, vlessResponseHeader, null, log);
+	remoteSocketToWS(tcpSocket, webSocket, vlessResponseHeader, retry, log);
 }
 
 
